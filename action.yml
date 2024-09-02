@@ -1,6 +1,12 @@
 name: "Build NextJs App"
 description: "Build NextJs App"
 inputs:
+  username:
+    description: "Username from secrets"
+    required: true
+  user-token:
+    description: "User token from secrets"
+    required: true
   module-directory:
     description: "For one repo, the directory of module. By default ./"
     required: true
@@ -37,13 +43,15 @@ runs:
         cache-dependency-path: ${{ inputs.module-directory }}/package-lock.json
 
     - name: "Install Node dependencies"
+      shell: bash
       run: |
         cd ./${{ inputs.module-directory }}
         npm install
       env:
-        NODE_AUTH_TOKEN: ${{secrets.GH_PKG_TOKEN}}
+        NODE_AUTH_TOKEN: ${{ inputs.user-token }}
 
     - name: "Build Next App"
+      shell: bash
       run: |
         cd ./${{ inputs.module-directory }}
         npm run build
@@ -55,8 +63,8 @@ runs:
       uses: docker/login-action@v3
       with:
         registry: ${{ inputs.docker-registry }}
-        username: ${{ secrets.GH_PKG_USERNAME }}
-        password: ${{ secrets.GH_PKG_TOKEN }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.user-token }}
 
     - name: Extract metadata (tags, labels) for Docker
       id: meta
