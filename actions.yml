@@ -1,0 +1,81 @@
+name: "Build NextJs App"
+description: "Build NextJs App"
+inputs:
+  module-directory:
+    description: "For one repo, the directory of module. By default ./"
+    required: true
+    default: "./"
+  docker-registry:
+    description: "The docker registry to push image. By default ghcr.io"
+    required: true
+    default: "ghcr.io"
+  docker-image-name:
+    description: "The name of the docker image"
+    required: true
+  docker-repository-name:
+    description: "The name of docker repository. By default loga-engineering/loga-docker-images"
+    required: true
+    default: "loga-engineering/loga-docker-images"
+  docker-tag-version:
+    description: "The tag version for docker image"
+    required: true
+  node-version:
+    description: "The node version."
+    required: true
+    default: 21
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node 21
+      uses: actions/setup-node@v4
+      with:
+        cache: "npm"
+        node-version: ${{ inputs.node-version }}
+        registry-url: 'https://npm.pkg.github.com'
+        scope: '@loga-engineering'
+        cache-dependency-path: ${{ inputs.module-directory }}/package-lock.json
+
+    - name: "Install Node dependencies"
+      run: |
+        cd ./${{ inputs.module-directory }}
+        npm install
+      env:
+        NODE_AUTH_TOKEN: ${{secrets.GH_PKG_TOKEN}}
+
+    - name: "Build Next App"
+      run: |
+        cd ./${{ inputs.module-directory }}
+        npm run build
+
+    - name: "Set up Docker Buildx"
+      uses: docker/setup-buildx-action@v3
+
+    - name: "Log in to the GitHub Package Docker registry"
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.docker-registry }}
+        username: ${{ secrets.GH_PKG_USERNAME }}
+        password: ${{ secrets.GH_PKG_TOKEN }}
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ inputs.docker-registry }}/${{ inputs.docker-repository-name }}/${{ inputs.docker-image-name }}
+        tags: |
+          ${{ inputs.docker-tag-version }}
+          latest
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        push: true
+        context: ${{ inputs.module-directory }}/
+        file: ${{ inputs.module-directory }}/Dockerfile
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=registry,ref=${{ inputs.docker-registry }}/${{ inputs.docker-repository-name }}/${{ inputs.docker-image-name }}:latest
+        cache-to: type=registry,ref=${{ inputs.docker-registry }}/${{ inputs.docker-repository-name }}/${{ inputs.docker-image-name }}:latest,mode=max
+
